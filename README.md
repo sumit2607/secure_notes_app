@@ -15,24 +15,30 @@ A production-style, secure desktop application for managing private notes. Built
 
 This application follows a "Security by Design" approach for local data:
 
-1. **Dual-Layer Encryption**: 
-   - **At Rest**: The entire database is encrypted using SQLCipher (AES-256-CBC).
-   - **In-Database**: Sensitive fields (Title, Content) are individually encrypted using **AES-256-GCM**. This provides defense-in-depth even if the database is partially compromised.
-2. **App Lock & Local Auth**:
-   - The app supports a startup/resume lock screen.
-   - **Biometrics**: Native support for Windows Hello / TouchID / FaceID via the `local_auth` service.
-   - **Secure PIN**: Fallback PIN stored in OS secure storage.
+1. **Disk Encryption & Hardening**: 
+   - **SQLCipher (AES-256-CBC)**: Full database encryption with `secure_delete` enabled.
+   - **Enhanced Hardening**: Configured with `256,000 KDF iterations`, `HMAC-SHA512`, and `PBKDF2-HMAC-SHA512` for extreme resistance against brute-force attacks.
+2. **Field-Level Encryption**:
+   - **AES-256-GCM**: Sensitive fields are double-encrypted with unique IVs for every record.
+   - **Decryption-on-Demand**: Notes are only decrypted in memory when actively opened.
 3. **Secure Key Management**:
-   - Master keys are generated using CSPRNG and stored in Hardware-backed vaults (Windows Credential Manager / macOS Keychain).
-   - Keys are never hardcoded or exposed in logs.
-4. **Defense Against SQL Injection**: Every database query uses **parameterized statements**.
-5. **Data Remnant Protection**: Database uses `PRAGMA secure_delete = ON` to zero-out deleted content on disk.
-6. **Inactivity Auto-Lock**: The application automatically locks sensitive data after 5 minutes of inactivity.
-7. **Secure Migration**: An automated background utility safely encrypts any legacy plain-text notes found during first launch.
-8. **Secure Logging**: A custom `SecureLogger` replaces standard print statements, ensuring sensitive data never reaches console/system logs.
-9. **Reverse Engineering Protections (Anti-Reversing)**:
-   - **Code Obfuscation**: Scrambles class/method names in release builds using `flutter build --obfuscate`.
-   - **Metadata Stripping**: Removes debug symbols from the final binary using `--split-debug-info`.
+   - Keys are stored in Hardware-backed OS vaults (Windows Credential Manager / Apple Keychain).
+   - **macOS Dev Resilience**: Includes an in-memory fallback and self-healing logic for development sessions.
+4. **Advanced Access Control**:
+   - **Biometric & PIN**: Hardware-backed auth (TouchID/Windows Hello) with secure PIN fallback.
+   - **Auto-Lock**: Automatic lock after 5 minutes of inactivity or when the app is backgrounded/minimized.
+5. **Brute-Force & Emergency Protection**:
+   - **Rate Limiting**: Failed attempts trigger progressive lockouts (30s, 5m, 1h).
+   - **Emergency Wipe**: Critical data and keys are wiped after 10 consecutive failed attempts.
+6. **Physical & Visual Privacy**:
+   - **Screen Masking**: Contents are automatically blurred when the app loses focus or is backgrounded.
+   - **Clipboard Protection**: Automatically clears the system clipboard 30 seconds after copying.
+7. **Integrity & Anti-Tamper**:
+   - **Startup Checks**: Verifies binary integrity and detects debugger attachments.
+   - **Reverse Engineering Defense**: Native AOT compilation with symbol obfuscation and metadata stripping.
+8. **Secure Infrastructure**:
+   - **Secure Logging**: Sanitized logging ensures no keys or content ever reach the console.
+   - **Sandbox Storage**: Strictly follows platform-specific app-support directory rules.
 
 ## 🛠️ Build for Release (Anti-Reversing)
 

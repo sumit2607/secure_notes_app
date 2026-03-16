@@ -16,10 +16,16 @@ import 'presentation/controllers/note_controller.dart';
 import 'presentation/pages/lock_page.dart';
 import 'services/app_lock_service.dart';
 import 'services/encryption_key_service.dart';
+import 'services/integrity_service.dart';
 import 'services/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 10. Tamper Detection & 12. Anti-Debugging
+  if (!(await IntegrityService.check())) {
+    exit(1);
+  }
 
   // ── Configure SQLCipher library loading ────────────────────
   _configureSqlCipher();

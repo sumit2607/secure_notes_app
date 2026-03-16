@@ -17,6 +17,10 @@ class SecurityConfig {
   /// SECURITY: These are applied after PRAGMA key so that the database
   /// is already unlocked when they execute.
   static const List<String> securePragmas = [
+    'PRAGMA cipher_page_size = 4096;',
+    'PRAGMA kdf_iter = 256000;',
+    'PRAGMA cipher_hmac_algorithm = HMAC_SHA512;',
+    'PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512;',
     'PRAGMA foreign_keys = ON;',
     'PRAGMA secure_delete = ON;',
     'PRAGMA auto_vacuum = INCREMENTAL;',
