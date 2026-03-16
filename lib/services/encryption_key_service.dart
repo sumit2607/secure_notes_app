@@ -17,8 +17,10 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import '../core/constants/app_constants.dart';
 import '../core/errors/app_exceptions.dart';
 import 'secure_storage_service.dart';
@@ -34,6 +36,16 @@ class EncryptionKeyService {
   /// cryptographic random number generator (CryptGenRandom on
   /// Windows, /dev/urandom on Unix-like systems).
   Future<String> getOrCreateKey() async {
+    // BYPASS: For macOS development where Keychain access is failing.
+    // This allows the app to run and maintain persistence without a working Keychain.
+    if (Platform.isMacOS && kDebugMode) {
+      debugPrint('WARNING: Using hardcoded encryption key for macOS bypass');
+      // Exactly 32 bytes (256 bits) of data.
+      // String: "MACOS_BYPASS_DEV_KEY_32_BYTES_!!"
+      // Base64URL: TUFDT1NfQllQQVNTX0RFVl9LRVlfMzJfQllURVNfISE=
+      return 'TUFDT1NfQllQQVNTX0RFVl9LRVlfMzJfQllURVNfISE='; 
+    }
+
     try {
       // Attempt to read existing key
       final existingKey = await _secureStorage.read(

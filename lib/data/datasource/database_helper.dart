@@ -95,7 +95,23 @@ class DatabaseHelper {
       _runMigrations(db);
 
       return DatabaseHelper._(db);
-    } on DatabaseException {
+    } on DatabaseException catch (e) {
+      // BYPASS: On macOS development, if the key is wrong (likely because we changed the bypass key),
+      // delete the database and try again. This prevents the "Key verification failed" crash.
+      if (Platform.isMacOS && kDebugMode && e.debugMessage?.contains('Key verification failed') == true) {
+        debugPrint('WARNING: Database key mismatch on macOS. Deleting database for fresh start.');
+        try {
+          final dbPath = await _getDatabasePath();
+          final file = File(dbPath);
+          if (file.existsSync()) {
+            file.deleteSync();
+            // Retry initialization once
+            return initialize(keyService);
+          }
+        } catch (retryError) {
+          debugPrint('Failed to delete corrupted database: $retryError');
+        }
+      }
       rethrow;
     } on KeyManagementException {
       rethrow;

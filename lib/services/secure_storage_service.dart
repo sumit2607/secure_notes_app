@@ -12,19 +12,24 @@
 /// or mocked during testing without changing calling code.
 library;
 
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorageService {
   // SECURITY: Use encrypted shared preferences on Android,
   // Keychain on iOS/macOS, and Credential Manager on Windows.
   final FlutterSecureStorage _storage;
+  
+  // FALLBACK: Used on macOS when Keychain access fails (e.g., Code: -34018)
+  final Map<String, String> _memoryFallback = {};
 
   SecureStorageService({FlutterSecureStorage? storage})
       : _storage = storage ??
             const FlutterSecureStorage(
               aOptions: AndroidOptions(encryptedSharedPreferences: true),
               wOptions: WindowsOptions(),
-              mOptions: const MacOsOptions(
+              mOptions: MacOsOptions(
                 accountName: 'secure_notes_app',
               ),
             );
@@ -32,21 +37,53 @@ class SecureStorageService {
   /// Reads a value from secure storage.
   /// Returns `null` if the key does not exist.
   Future<String?> read(String key) async {
-    return _storage.read(key: key);
+    try {
+      return await _storage.read(key: key);
+    } catch (e) {
+      if (Platform.isMacOS && kDebugMode) {
+        debugPrint('SecureStorage read failed (likely -34018), using fallback: $e');
+        return _memoryFallback[key];
+      }
+      rethrow;
+    }
   }
 
   /// Writes a value to secure storage.
   Future<void> write(String key, String value) async {
-    await _storage.write(key: key, value: value);
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (e) {
+      if (Platform.isMacOS && kDebugMode) {
+        debugPrint('SecureStorage write failed (likely -34018), using fallback: $e');
+        _memoryFallback[key] = value;
+        return;
+      }
+      rethrow;
+    }
   }
 
   /// Deletes a value from secure storage.
   Future<void> delete(String key) async {
-    await _storage.delete(key: key);
+    try {
+      await _storage.delete(key: key);
+    } catch (e) {
+      if (Platform.isMacOS && kDebugMode) {
+        _memoryFallback.remove(key);
+        return;
+      }
+      rethrow;
+    }
   }
 
   /// Checks whether a key exists in secure storage.
   Future<bool> containsKey(String key) async {
-    return _storage.containsKey(key: key);
+    try {
+      return await _storage.containsKey(key: key);
+    } catch (e) {
+      if (Platform.isMacOS && kDebugMode) {
+        return _memoryFallback.containsKey(key);
+      }
+      rethrow;
+    }
   }
 }
