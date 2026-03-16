@@ -53,8 +53,10 @@ void main() async {
       ),
     );
   } catch (e) {
-    debugPrint('[INIT] Application failed to start: $e');
-    runApp(_DatabaseErrorApp(errorMessage: e.toString()));
+    // SECURITY: Do not expose internal error details to the UI.
+    // The error app shows a generic, safe message.
+    debugPrint('[INIT] Application failed to start: ${e.runtimeType}');
+    runApp(const _DatabaseErrorApp());
   }
 }
 
@@ -84,9 +86,9 @@ void _configureSqlCipher() {
 }
 
 /// Fallback app displayed when database initialization fails.
+/// Fallback app displayed when database initialization fails.
 class _DatabaseErrorApp extends StatelessWidget {
-  final String? errorMessage;
-  const _DatabaseErrorApp({this.errorMessage});
+  const _DatabaseErrorApp();
 
   @override
   Widget build(BuildContext context) {
@@ -124,9 +126,11 @@ class _DatabaseErrorApp extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  errorMessage ?? 'The secure database could not be opened.\nPlease restart the application.',
-                  style: const TextStyle(
+                const Text(
+                  'The secure database could not be opened.\n'
+                  'Please restart the application. If the problem '
+                  'persists, the database file may be corrupted.',
+                  style: TextStyle(
                     fontSize: 14,
                     color: Color(0xFF666666),
                     height: 1.5,

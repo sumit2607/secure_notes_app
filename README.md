@@ -24,6 +24,26 @@ This application follows a "Security by Design" approach for local data:
 4. **Data Remnant Protection**: The database is configured with `PRAGMA secure_delete = ON`, which overwrites deleted content with zeros to prevent data recovery from free pages.
 5. **Secure App Directories**: The database file is stored in `%APPDATA%`, following platform conventions for non-public user data.
 6. **No Sensitive Logging**: Debug logging is automatically suppressed in release mode, and sensitive data (like note content or keys) is never logged in any mode.
+7. **Reverse Engineering Protections (Anti-Reversing)**:
+   - **Code Obfuscation**: The release build is configured to obfuscate the Dart source code, renaming classes, methods, and variables to meaningless strings.
+   - **Metadata Stripping**: Debug symbols are removed from the final binary to prevent stack trace recovery.
+   - **SQLCipher**: Even if the binary is decompiled, the database itself is fully encrypted and requires a key managed by the OS-level secure vault (Keychain/DPAPI).
+
+## 🛠️ Build for Release (Anti-Reversing)
+
+To build the application with active obfuscation and metadata stripping, use the following commands:
+
+**macOS:**
+```bash
+flutter build macos --obfuscate --split-debug-info=./debug_info
+```
+
+**Windows:**
+```bash
+flutter build windows --obfuscate --split-debug-info=./debug_info
+```
+
+*The `--obfuscate` flag scrambles the code names, and `--split-debug-info` extracts the debugging symbols into a separate folder so they aren't shipped within the application binary.*
 
 ## 🏗️ Architecture
 
