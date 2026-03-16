@@ -1,0 +1,31 @@
+name: secure_notes_app
+description: A secure notes application with encrypted SQLite storage for Windows desktop.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # SQLite FFI bindings for direct database access with prepared statements
+  sqlite3: ^2.7.0
+  # Provides pre-built SQLCipher native libraries for encrypted SQLite
+  sqlcipher_flutter_libs: ^0.6.5
+  # Platform-specific application directories (AppData on Windows)
+  path_provider: ^2.1.5
+  # Secure key storage (Windows Credential Manager / DPAPI)
+  flutter_secure_storage: ^9.2.4
+  # Simple, clean state management
+  provider: ^6.1.4
+  # Date formatting utilities
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
