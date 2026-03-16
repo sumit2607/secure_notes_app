@@ -23,11 +23,56 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final controller = context.watch<NoteController>();
+
+    if (isMobile) {
+      final showDetail = controller.selectedNote != null || controller.isEditing;
+
+      return PopScope(
+        canPop: !showDetail,
+        onPopInvokedWithResult: (bool didPop, dynamic result) {
+          if (didPop) return;
+          if (controller.isEditing) {
+            controller.cancelEditing();
+          } else {
+            controller.selectNote(null);
+          }
+        },
+        child: Scaffold(
+          body: SafeArea(
+            child: showDetail
+                ? Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, top: 8.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: BackButton(
+                            onPressed: () {
+                              if (controller.isEditing) {
+                                controller.cancelEditing();
+                              } else {
+                                controller.selectNote(null);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const Expanded(child: _DetailPanel()),
+                    ],
+                  )
+                : const _NoteListPanel(isMobile: true),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Row(
         children: [
           // ── Left Panel (Sidebar) ─────────────────────────
-          const _NoteListPanel(),
+          const _NoteListPanel(isMobile: false),
 
           // Divider
           VerticalDivider(
@@ -49,16 +94,15 @@ class HomePage extends StatelessWidget {
 
 /// Left sidebar: app header, search, and notes list.
 class _NoteListPanel extends StatelessWidget {
-  const _NoteListPanel();
+  final bool isMobile;
+  const _NoteListPanel({this.isMobile = false});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final controller = context.watch<NoteController>();
 
-    return SizedBox(
-      width: AppConstants.sidebarWidth,
-      child: Column(
+    Widget content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── App Header ─────────────────────────────────────
@@ -180,7 +224,15 @@ class _NoteListPanel extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      );
+
+    if (isMobile) {
+      return content;
+    }
+
+    return SizedBox(
+      width: AppConstants.sidebarWidth,
+      child: content,
     );
   }
 

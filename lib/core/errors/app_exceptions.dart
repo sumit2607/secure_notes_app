@@ -16,7 +16,7 @@ class AppException implements Exception {
   const AppException(this.userMessage, {this.debugMessage});
 
   @override
-  String toString() => 'AppException: $userMessage';
+  String toString() => 'AppException: $userMessage' + (debugMessage != null ? '\n\nDebug: $debugMessage' : '');
 }
 
 /// Thrown when database operations fail.

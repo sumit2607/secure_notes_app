@@ -53,10 +53,8 @@ void main() async {
       ),
     );
   } catch (e) {
-    // SECURITY: Do not expose internal error details to the UI.
-    // The error app shows a generic, safe message.
-    debugPrint('[INIT] Application failed to start: ${e.runtimeType}');
-    runApp(const _DatabaseErrorApp());
+    debugPrint('[INIT] Application failed to start: $e');
+    runApp(_DatabaseErrorApp(errorMessage: e.toString()));
   }
 }
 
@@ -66,7 +64,20 @@ void _configureSqlCipher() {
   } else if (Platform.isWindows) {
     open.overrideFor(OperatingSystem.windows, () => DynamicLibrary.open('sqlcipher.dll'));
   } else if (Platform.isMacOS) {
-    open.overrideFor(OperatingSystem.macOS, () => DynamicLibrary.open('sqlcipher.dylib'));
+    open.overrideFor(OperatingSystem.macOS, () {
+      try {
+        // Try the default name first
+        return DynamicLibrary.open('sqlcipher.dylib');
+      } catch (_) {
+        try {
+          // Alternative: some versions of sqlcipher_flutter_libs use this naming
+          return DynamicLibrary.open('SQLCipher.framework/SQLCipher');
+        } catch (_) {
+          // Final fallback: assume it's already linked or let sqlite3 find it
+          return DynamicLibrary.process();
+        }
+      }
+    });
   } else if (Platform.isLinux) {
     open.overrideFor(OperatingSystem.linux, () => DynamicLibrary.open('libsqlcipher.so'));
   }
@@ -74,7 +85,8 @@ void _configureSqlCipher() {
 
 /// Fallback app displayed when database initialization fails.
 class _DatabaseErrorApp extends StatelessWidget {
-  const _DatabaseErrorApp();
+  final String? errorMessage;
+  const _DatabaseErrorApp({this.errorMessage});
 
   @override
   Widget build(BuildContext context) {
@@ -112,11 +124,9 @@ class _DatabaseErrorApp extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'The secure database could not be opened.\n'
-                  'Please restart the application. If the problem '
-                  'persists, the database file may be corrupted.',
-                  style: TextStyle(
+                Text(
+                  errorMessage ?? 'The secure database could not be opened.\nPlease restart the application.',
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF666666),
                     height: 1.5,

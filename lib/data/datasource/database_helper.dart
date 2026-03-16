@@ -102,7 +102,7 @@ class DatabaseHelper {
     } catch (e) {
       throw DatabaseException(
         'Failed to initialize the database. Please restart the application.',
-        debugMessage: 'DB init error: ${e.runtimeType}',
+        debugMessage: 'DB init error: $e',
       );
     }
   }

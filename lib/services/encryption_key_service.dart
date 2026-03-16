@@ -52,11 +52,11 @@ class EncryptionKeyService {
 
       return newKey;
     } catch (e) {
-      // SECURITY: Do not include the actual error message in user-facing
-      // output as it might contain storage implementation details.
+      // SECURITY: In production, we should avoid leaking details.
+      // But we need this for debugging the current initialization issue.
       throw KeyManagementException(
         'Failed to initialize encryption. Please restart the application.',
-        debugMessage: 'Key management error: ${e.runtimeType}',
+        debugMessage: 'Key management error: $e',
       );
     }
   }

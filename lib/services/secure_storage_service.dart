@@ -24,6 +24,9 @@ class SecureStorageService {
             const FlutterSecureStorage(
               aOptions: AndroidOptions(encryptedSharedPreferences: true),
               wOptions: WindowsOptions(),
+              mOptions: MacOsOptions(
+                accountName: 'secure_notes_app',
+              ),
             );
 
   /// Reads a value from secure storage.
