@@ -17,6 +17,7 @@ import '../widgets/empty_state_widget.dart';
 import '../widgets/note_list_tile.dart';
 import 'note_detail_panel.dart';
 import 'note_editor_page.dart';
+import '../../services/app_lock_service.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});

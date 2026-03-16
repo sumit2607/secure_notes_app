@@ -59,7 +59,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => lockService),
           ChangeNotifierProvider(create: (_) => NoteController(repository)),
         ],
-        child: const SecurityWrapper(child: SecureNotesApp()),
+        child: const SecureNotesApp(),
       ),
     );
   } catch (e) {
@@ -68,31 +68,7 @@ void main() async {
   }
 }
 
-/// A wrapper widget that listens to [AppLockService] and overlays
-/// the [LockPage] if the application is locked.
-class SecurityWrapper extends StatelessWidget {
-  final Widget child;
-  const SecurityWrapper({super.key, required this.child});
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AppLockService>(
-      builder: (context, lockService, _) {
-        return Listener(
-          onPointerDown: (_) => lockService.resetInactivityTimer(),
-          onPointerMove: (_) => lockService.resetInactivityTimer(),
-          child: Stack(
-            children: [
-              child,
-              if (lockService.isLocked)
-                const Positioned.fill(child: LockPage()),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
 
 void _configureSqlCipher() {
   if (Platform.isAndroid) {

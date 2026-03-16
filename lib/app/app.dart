@@ -7,6 +7,8 @@ import '../core/constants/app_constants.dart';
 import '../presentation/pages/home_page.dart';
 import 'theme.dart';
 
+import '../presentation/widgets/security_wrapper.dart';
+
 class SecureNotesApp extends StatelessWidget {
   const SecureNotesApp({super.key});
 
@@ -18,6 +20,9 @@ class SecureNotesApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
+      builder: (context, child) {
+        return SecurityWrapper(child: child!);
+      },
       home: const HomePage(),
     );
   }
