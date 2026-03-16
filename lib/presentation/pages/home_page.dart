@@ -145,7 +145,51 @@ class _NoteListPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                // New note button
+                // ── Security Controls ──────────────────────
+                Consumer<AppLockService>(
+                  builder: (context, lockService, _) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (lockService.isLockEnabled)
+                          IconButton(
+                            icon: const Icon(Icons.lock_outline, size: 20),
+                            tooltip: 'Lock App',
+                            onPressed: () => lockService.lock(),
+                          ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.security, size: 20),
+                          tooltip: 'Security Settings',
+                          onSelected: (value) async {
+                            if (value == 'set_pin') {
+                              _showSetPinDialog(context, lockService);
+                            } else if (value == 'disable') {
+                              await lockService.disableLock();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            if (!lockService.isLockEnabled)
+                              const PopupMenuItem(
+                                value: 'set_pin',
+                                child: Text('Enable App Lock'),
+                              )
+                            else ...[
+                              const PopupMenuItem(
+                                value: 'set_pin',
+                                child: Text('Change PIN'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'disable',
+                                child: Text('Disable App Lock'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(width: 4),                // New note button
                 IconButton.filled(
                   onPressed: () => controller.startCreating(),
                   icon: const Icon(Icons.add, size: 20),
@@ -233,6 +277,48 @@ class _NoteListPanel extends StatelessWidget {
     return SizedBox(
       width: AppConstants.sidebarWidth,
       child: content,
+    );
+  }
+
+  Future<void> _showSetPinDialog(BuildContext context, AppLockService lockService) {
+    final controller = TextEditingController();
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Application PIN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter a 4-digit PIN to protect your notes.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              decoration: const InputDecoration(
+                hintText: 'PIN',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.length == 4) {
+                lockService.setPin(controller.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save PIN'),
+          ),
+        ],
+      ),
     );
   }
 

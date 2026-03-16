@@ -21,6 +21,12 @@ dependencies:
   provider: ^6.1.4
   # Date formatting utilities
   intl: ^0.20.2
+  # Cryptographic primitives for field encryption (AES-GCM)
+  cryptography: ^2.5.0
+  # Native biometric authentication for desktop
+  local_auth: ^2.3.0
+  # Unique ID generation for nonces
+  uuid: ^4.4.0
 
 dev_dependencies:
   flutter_test:

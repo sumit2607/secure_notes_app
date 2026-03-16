@@ -15,19 +15,24 @@ A production-style, secure desktop application for managing private notes. Built
 
 This application follows a "Security by Design" approach for local data:
 
-1. **SQLCipher Encryption**: The database is never stored in plain text. It uses SQLCipher with AES-256-CBC encryption.
-2. **Secure Key Management**:
-   - The 256-bit encryption key is generated using the OS's cryptographically secure random number generator (CSPRNG).
-   - The key is **never hardcoded**.
-   - It is stored using `flutter_secure_storage`, which utilizes the **Windows Credential Manager (DPAPI)** to isolate the secret to the current user account.
-3. **Defense Against SQL Injection**: Every single database query uses **parameterized statements**. No raw string concatenation is used for user data.
-4. **Data Remnant Protection**: The database is configured with `PRAGMA secure_delete = ON`, which overwrites deleted content with zeros to prevent data recovery from free pages.
-5. **Secure App Directories**: The database file is stored in `%APPDATA%`, following platform conventions for non-public user data.
-6. **No Sensitive Logging**: Debug logging is automatically suppressed in release mode, and sensitive data (like note content or keys) is never logged in any mode.
-7. **Reverse Engineering Protections (Anti-Reversing)**:
-   - **Code Obfuscation**: The release build is configured to obfuscate the Dart source code, renaming classes, methods, and variables to meaningless strings.
-   - **Metadata Stripping**: Debug symbols are removed from the final binary to prevent stack trace recovery.
-   - **SQLCipher**: Even if the binary is decompiled, the database itself is fully encrypted and requires a key managed by the OS-level secure vault (Keychain/DPAPI).
+1. **Dual-Layer Encryption**: 
+   - **At Rest**: The entire database is encrypted using SQLCipher (AES-256-CBC).
+   - **In-Database**: Sensitive fields (Title, Content) are individually encrypted using **AES-256-GCM**. This provides defense-in-depth even if the database is partially compromised.
+2. **App Lock & Local Auth**:
+   - The app supports a startup/resume lock screen.
+   - **Biometrics**: Native support for Windows Hello / TouchID / FaceID via the `local_auth` service.
+   - **Secure PIN**: Fallback PIN stored in OS secure storage.
+3. **Secure Key Management**:
+   - Master keys are generated using CSPRNG and stored in Hardware-backed vaults (Windows Credential Manager / macOS Keychain).
+   - Keys are never hardcoded or exposed in logs.
+4. **Defense Against SQL Injection**: Every single database query uses **parameterized statements**.
+5. **Data Remnant Protection**: Database uses `PRAGMA secure_delete = ON` to zero-out deleted content.
+6. **Inactivity Auto-Lock**: The application automatically locks sensitive data after 5 minutes of inactivity.
+7. **Secure Migration**: An automated background utility safely encrypts any legacy plain-text notes found during first launch.
+8. **Secure Logging**: A custom `SecureLogger` replaces standard print statements, ensuring sensitive data never reaches console/system logs.
+9. **Reverse Engineering Protections (Anti-Reversing)**:
+   - **Code Obfuscation**: Scrambles class/method names in release builds.
+   - **Metadata Stripping**: Removes debug symbols from the final binary.
 
 ## 🛠️ Build for Release (Anti-Reversing)
 
@@ -67,6 +72,24 @@ The project follows a **Clean Architecture** pattern to ensure maintainability a
 - **Process Memory**: While data is encrypted on disk, it is decrypted in memory during the app's execution. A sophisticated attacker with administrative access and memory dump capabilities could potentially extract note content.
 - **Single User Focus**: The current version assumes a single encryption key per Windows user account.
 - **No Remote Backup**: Data is local-only. Loss of the machine or the Windows user profile (without backups) results in data loss.
+
+## 🔐 Backup & Recovery
+- **No Backdoors**: Because all data is encrypted with keys stored in your system's hardware vault, if you lose access to your OS account or forget your master PIN, your data is **cryptographically unrecoverable**.
+- **Secure Backups**: To backup your notes, copy the `secure_notes.db` file from `%APPDATA%` (Windows) or `~/Library/Application Support` (macOS). 
+- **Restoring**: Paste the file back into the same directory. Note that you may need your original OS account or PIN to decrypt the content.
+
+## 🕵️ Threat Model
+- **Mitigated: Casual File Theft**: An attacker stealing the `.db` file cannot read the contents without the per-user OS-vault key.
+- **Mitigated: Plain-text DB Exposure**: Even if the DB is unlocked, sensitive fields are garbage (AES-GCM ciphertext).
+- **Mitigated: Forensics recovery**: `secure_delete` ensures data is physically overwritten on the disk when deleted.
+- **Limitation: Compromised OS**: If an attacker has a keylogger or administrative memory dump access, no client-side encryption can fully protect live data.
+
+## 🛠️ Security Verification Checklist
+- [ ] **App Lock**: Verify that the app asks for biometrics/PIN on startup.
+- [ ] **Inactivity**: Wait 5 minutes; verify the app locks automatically.
+- [ ] **Logging**: Run in release mode; verify no sensitive logs appear in system console.
+- [ ] **Encryption**: Open the database file in a hex editor; verify all note content is non-readable.
+- [ ] **Migration**: Add a plain-text note manually to a test DB; verify the app encrypts it on the next launch.
 
 ## 🏃 How to Run on Windows
 

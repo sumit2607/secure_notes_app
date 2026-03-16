@@ -1,40 +1,46 @@
-/// Concrete [NoteRepository] implementation backed by encrypted SQLite.
-///
-/// SECURITY: Every query uses parameterized statements (the `?` syntax
-/// in sqlite3 prepared statements). No user input is ever concatenated
-/// into SQL strings. This eliminates SQL injection as an attack vector.
-library;
-
 import 'package:sqlite3/sqlite3.dart' as sql;
-
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exceptions.dart';
+import '../../core/security/encryption_service.dart';
+import '../../core/security/secure_logger.dart';
 import '../../data/datasource/database_helper.dart';
 import '../../data/models/note_model.dart';
 import '../../domain/entities/note.dart';
 import '../../domain/repositories/note_repository.dart';
 
+/// Concrete [NoteRepository] implementation backed by encrypted SQLite
+/// and field-level AES-GCM encryption.
+///
+/// SECURITY:
+/// 1. Entire DB is encrypted at rest (SQLCipher).
+/// 2. Sensitive fields (title, content) are individually encrypted (AES-GCM).
+/// 3. Parameterized queries prevent SQL injection.
 class NoteRepositoryImpl implements NoteRepository {
   final DatabaseHelper _dbHelper;
+  final EncryptionService _encryption;
 
-  NoteRepositoryImpl(this._dbHelper);
+  NoteRepositoryImpl(this._dbHelper, this._encryption);
 
   sql.Database get _db => _dbHelper.database;
 
   @override
   Future<List<Note>> getAllNotes() async {
     try {
-      // SECURITY: No user input in this query — pure static SQL.
       final results = _db.select('''
         SELECT * FROM ${AppConstants.notesTable}
         ORDER BY is_pinned DESC, updated_at DESC
       ''');
 
-      return results.map((row) => NoteModel.fromMap(_rowToMap(row))).toList();
+      final notes = <Note>[];
+      for (final row in results) {
+        notes.add(await _decryptNote(NoteModel.fromMap(_rowToMap(row))));
+      }
+      return notes;
     } catch (e) {
+      SecureLogger.error('REPO', 'Failed to load notes', e);
       throw DatabaseException(
         'Failed to load notes.',
-        debugMessage: 'getAllNotes error: ${e.runtimeType}',
+        debugMessage: 'getAllNotes error: $e',
       );
     }
   }
@@ -42,42 +48,43 @@ class NoteRepositoryImpl implements NoteRepository {
   @override
   Future<Note?> getNoteById(int id) async {
     try {
-      // SECURITY: Parameterized query — [id] is bound, not concatenated.
       final results = _db.select(
         'SELECT * FROM ${AppConstants.notesTable} WHERE id = ?',
         [id],
       );
 
       if (results.isEmpty) return null;
-      return NoteModel.fromMap(_rowToMap(results.first));
+      return await _decryptNote(NoteModel.fromMap(_rowToMap(results.first)));
     } catch (e) {
+      SecureLogger.error('REPO', 'Failed to load note $id', e);
       throw DatabaseException(
         'Failed to load the note.',
-        debugMessage: 'getNoteById error: ${e.runtimeType}',
+        debugMessage: 'getNoteById error: $e',
       );
     }
   }
 
   @override
   Future<List<Note>> searchNotes(String query) async {
+    if (query.isEmpty) return getAllNotes();
+    
     try {
-      // SECURITY: Search term is parameterized with LIKE wildcards
-      // applied in Dart, not through string concatenation in SQL.
-      final searchPattern = '%$query%';
-      final results = _db.select(
-        '''
-        SELECT * FROM ${AppConstants.notesTable}
-        WHERE title LIKE ? OR content LIKE ? OR category LIKE ?
-        ORDER BY is_pinned DESC, updated_at DESC
-        ''',
-        [searchPattern, searchPattern, searchPattern],
-      );
-
-      return results.map((row) => NoteModel.fromMap(_rowToMap(row))).toList();
+      // SECURITY: Because fields are encrypted, we cannot use SQL LIKE.
+      // We load and decrypt notes, then filter in memory.
+      // For a desktop app with < 10,000 notes, this is extremely fast.
+      final allNotes = await getAllNotes();
+      final lowerQuery = query.toLowerCase();
+      
+      return allNotes.where((note) {
+        return note.title.toLowerCase().contains(lowerQuery) ||
+               note.content.toLowerCase().contains(lowerQuery) ||
+               (note.category?.toLowerCase().contains(lowerQuery) ?? false);
+      }).toList();
     } catch (e) {
+      SecureLogger.error('REPO', 'Search failed', e);
       throw DatabaseException(
         'Search failed. Please try again.',
-        debugMessage: 'searchNotes error: ${e.runtimeType}',
+        debugMessage: 'searchNotes error: $e',
       );
     }
   }
@@ -86,14 +93,13 @@ class NoteRepositoryImpl implements NoteRepository {
   Future<Note> createNote(Note note) async {
     try {
       final now = DateTime.now().toUtc();
-      final noteToInsert = note.copyWith(
+      final encryptedNote = await _encryptNote(note.copyWith(
         createdAt: now,
         updatedAt: now,
-      );
+      ));
 
-      final map = NoteModel.toMap(noteToInsert);
+      final map = NoteModel.toMap(encryptedNote);
 
-      // SECURITY: Fully parameterized INSERT — all values are bound.
       _db.execute(
         '''
         INSERT INTO ${AppConstants.notesTable}
@@ -111,11 +117,12 @@ class NoteRepositoryImpl implements NoteRepository {
       );
 
       final id = _db.lastInsertRowId;
-      return noteToInsert.copyWith(id: id);
+      return note.copyWith(id: id, createdAt: now, updatedAt: now);
     } catch (e) {
+      SecureLogger.error('REPO', 'Failed to create note', e);
       throw DatabaseException(
         'Failed to save the note.',
-        debugMessage: 'createNote error: ${e.runtimeType}',
+        debugMessage: 'createNote error: $e',
       );
     }
   }
@@ -128,10 +135,9 @@ class NoteRepositoryImpl implements NoteRepository {
 
     try {
       final now = DateTime.now().toUtc();
-      final updatedNote = note.copyWith(updatedAt: now);
-      final map = NoteModel.toMap(updatedNote);
+      final encryptedNote = await _encryptNote(note.copyWith(updatedAt: now));
+      final map = NoteModel.toMap(encryptedNote);
 
-      // SECURITY: Fully parameterized UPDATE.
       _db.execute(
         '''
         UPDATE ${AppConstants.notesTable}
@@ -148,11 +154,12 @@ class NoteRepositoryImpl implements NoteRepository {
         ],
       );
 
-      return updatedNote;
+      return note.copyWith(updatedAt: now);
     } catch (e) {
+      SecureLogger.error('REPO', 'Failed to update note', e);
       throw DatabaseException(
         'Failed to update the note.',
-        debugMessage: 'updateNote error: ${e.runtimeType}',
+        debugMessage: 'updateNote error: $e',
       );
     }
   }
@@ -160,16 +167,15 @@ class NoteRepositoryImpl implements NoteRepository {
   @override
   Future<void> deleteNote(int id) async {
     try {
-      // SECURITY: Parameterized DELETE. Combined with PRAGMA
-      // secure_delete = ON, the data is overwritten with zeros.
       _db.execute(
         'DELETE FROM ${AppConstants.notesTable} WHERE id = ?',
         [id],
       );
     } catch (e) {
+      SecureLogger.error('REPO', 'Failed to delete note', e);
       throw DatabaseException(
         'Failed to delete the note.',
-        debugMessage: 'deleteNote error: ${e.runtimeType}',
+        debugMessage: 'deleteNote error: $e',
       );
     }
   }
@@ -177,7 +183,6 @@ class NoteRepositoryImpl implements NoteRepository {
   @override
   Future<Note> togglePin(int id) async {
     try {
-      // SECURITY: Parameterized query for toggling pin state.
       _db.execute(
         '''
         UPDATE ${AppConstants.notesTable}
@@ -189,20 +194,59 @@ class NoteRepositoryImpl implements NoteRepository {
       );
 
       final note = await getNoteById(id);
-      if (note == null) {
-        throw const NotFoundException('Note not found.');
-      }
+      if (note == null) throw const NotFoundException('Note not found.');
       return note;
     } catch (e) {
       if (e is AppException) rethrow;
-      throw DatabaseException(
-        'Failed to update pin status.',
-        debugMessage: 'togglePin error: ${e.runtimeType}',
-      );
+      throw DatabaseException('Failed to update pin status.');
     }
   }
 
-  /// Converts a [sql.Row] to a standard [Map<String, dynamic>].
+  /// Performs migration of plain-text notes to encrypted versions.
+  /// 
+  /// SECURITY: Once a note is migrated, the plain-text version is gone.
+  Future<void> migrateLegacyNotes() async {
+    try {
+      final results = _db.select('SELECT * FROM ${AppConstants.notesTable}');
+      int migratedCount = 0;
+
+      for (final row in results) {
+        final title = row['title'] as String;
+        final content = row['content'] as String;
+
+        // If either field is not encrypted, migrate the whole record.
+        if (!title.startsWith('encv1:') || !content.startsWith('encv1:')) {
+          final note = NoteModel.fromMap(_rowToMap(row));
+          await updateNote(note); // updateNote handles encryption
+          migratedCount++;
+        }
+      }
+
+      if (migratedCount > 0) {
+        SecureLogger.security('Successfully migrated $migratedCount legacy notes to encrypted format');
+      }
+    } catch (e) {
+      SecureLogger.error('MIGRATION', 'Failed to migrate notes', e);
+      // We don't throw here to avoid blocking app startup, but we log the error.
+    }
+  }
+
+  // ── Helper Methods ───────────────────────────────────────────
+
+  Future<Note> _encryptNote(Note note) async {
+    return note.copyWith(
+      title: await _encryption.encrypt(note.title),
+      content: await _encryption.encrypt(note.content),
+    );
+  }
+
+  Future<Note> _decryptNote(Note note) async {
+    return note.copyWith(
+      title: await _encryption.decrypt(note.title),
+      content: await _encryption.decrypt(note.content),
+    );
+  }
+
   Map<String, dynamic> _rowToMap(sql.Row row) {
     final map = <String, dynamic>{};
     for (final key in row.keys) {

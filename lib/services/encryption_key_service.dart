@@ -52,8 +52,6 @@ class EncryptionKeyService {
 
       return newKey;
     } catch (e) {
-      // SECURITY: In production, we should avoid leaking details.
-      // But we need this for debugging the current initialization issue.
       throw KeyManagementException(
         'Failed to initialize encryption. Please restart the application.',
         debugMessage: 'Key management error: $e',

@@ -2,8 +2,8 @@
 /// SQLite row maps.
 ///
 /// SECURITY: Dates are stored as ISO-8601 strings (not Unix timestamps)
-/// for readability and safe parsing. No sensitive data transformations
-/// happen here — encryption is handled at the database layer.
+/// for readability and safe parsing. Sensitive fields (title, content)
+/// are encrypted before being passed to this model for storage.
 library;
 
 import '../../domain/entities/note.dart';

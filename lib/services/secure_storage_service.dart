@@ -24,7 +24,7 @@ class SecureStorageService {
             const FlutterSecureStorage(
               aOptions: AndroidOptions(encryptedSharedPreferences: true),
               wOptions: WindowsOptions(),
-              mOptions: MacOsOptions(
+              mOptions: const MacOsOptions(
                 accountName: 'secure_notes_app',
               ),
             );

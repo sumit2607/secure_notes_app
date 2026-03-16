@@ -1,15 +1,3 @@
-/// Application entry point.
-///
-/// Initializes:
-/// 1. SQLCipher native library loading for the current platform.
-/// 2. Encryption key service (generates or retrieves DB key).
-/// 3. Encrypted database connection.
-/// 4. Repository and controller wiring via Provider.
-///
-/// SECURITY: Debug output is suppressed in release mode to prevent
-/// accidental information leakage through console logs.
-library;
-
 import 'dart:ffi';
 import 'dart:io';
 
@@ -20,9 +8,13 @@ import 'package:sqlite3/open.dart';
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
 
 import 'app/app.dart';
+import 'core/security/encryption_service.dart';
+import 'core/security/secure_logger.dart';
 import 'data/datasource/database_helper.dart';
 import 'data/repositories/note_repository_impl.dart';
 import 'presentation/controllers/note_controller.dart';
+import 'presentation/pages/lock_page.dart';
+import 'services/app_lock_service.dart';
 import 'services/encryption_key_service.dart';
 import 'services/secure_storage_service.dart';
 
@@ -32,31 +24,73 @@ void main() async {
   // ── Configure SQLCipher library loading ────────────────────
   _configureSqlCipher();
 
-  // SECURITY: Suppress debug prints in release builds to prevent
-  // accidental information leakage via console output.
+  // SECURITY: Suppress all debug prints in release builds.
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
 
-  // ── Initialize services ────────────────────────────────────
+  // ── Initialize core security services ──────────────────────
   final secureStorage = SecureStorageService();
   final keyService = EncryptionKeyService(secureStorage);
+  final lockService = AppLockService(secureStorage);
+  
+  await lockService.initialize();
 
   try {
+    // 1. Get/Create the master database key
+    final masterKey = await keyService.getOrCreateKey();
+    
+    // 2. Initialize the SQLCipher database
     final dbHelper = await DatabaseHelper.initialize(keyService);
-    final repository = NoteRepositoryImpl(dbHelper);
+    
+    // 3. Initialize the Field Encryption Service (AES-GCM)
+    final encryptionService = await EncryptionService.initialize(masterKey);
+    
+    // 4. Initialize Repository and run legacy migration
+    final repository = NoteRepositoryImpl(dbHelper, encryptionService);
+    
+    // SECURITY: Potentially long-running migration of old plain-text notes.
+    // Done in background to not block startup.
+    repository.migrateLegacyNotes();
 
     runApp(
-      ChangeNotifierProvider(
-        create: (_) => NoteController(repository),
-        child: const SecureNotesApp(),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => lockService),
+          ChangeNotifierProvider(create: (_) => NoteController(repository)),
+        ],
+        child: const SecurityWrapper(child: SecureNotesApp()),
       ),
     );
   } catch (e) {
-    // SECURITY: Do not expose internal error details to the UI.
-    // The error app shows a generic, safe message.
-    debugPrint('[INIT] Application failed to start: ${e.runtimeType}');
-    runApp(const _DatabaseErrorApp());
+    SecureLogger.error('INIT', 'Critical initialization failure', e);
+    runApp(_DatabaseErrorApp(errorMessage: e.toString()));
+  }
+}
+
+/// A wrapper widget that listens to [AppLockService] and overlays
+/// the [LockPage] if the application is locked.
+class SecurityWrapper extends StatelessWidget {
+  final Widget child;
+  const SecurityWrapper({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppLockService>(
+      builder: (context, lockService, _) {
+        return Listener(
+          onPointerDown: (_) => lockService.resetInactivityTimer(),
+          onPointerMove: (_) => lockService.resetInactivityTimer(),
+          child: Stack(
+            children: [
+              child,
+              if (lockService.isLocked)
+                const Positioned.fill(child: LockPage()),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -68,14 +102,11 @@ void _configureSqlCipher() {
   } else if (Platform.isMacOS) {
     open.overrideFor(OperatingSystem.macOS, () {
       try {
-        // Try the default name first
-        return DynamicLibrary.open('sqlcipher.dylib');
+        return DynamicLibrary.open('../Frameworks/sqlcipher_flutter_libs.framework/Versions/A/sqlcipher_flutter_libs');
       } catch (_) {
         try {
-          // Alternative: some versions of sqlcipher_flutter_libs use this naming
-          return DynamicLibrary.open('SQLCipher.framework/SQLCipher');
+          return DynamicLibrary.open('sqlcipher.dylib');
         } catch (_) {
-          // Final fallback: assume it's already linked or let sqlite3 find it
           return DynamicLibrary.process();
         }
       }
@@ -85,10 +116,9 @@ void _configureSqlCipher() {
   }
 }
 
-/// Fallback app displayed when database initialization fails.
-/// Fallback app displayed when database initialization fails.
 class _DatabaseErrorApp extends StatelessWidget {
-  const _DatabaseErrorApp();
+  final String? errorMessage;
+  const _DatabaseErrorApp({this.errorMessage});
 
   @override
   Widget build(BuildContext context) {
@@ -105,36 +135,19 @@ class _DatabaseErrorApp extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.lock_outline,
-                    size: 48,
-                    color: Colors.red.shade400,
-                  ),
+                  decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
+                  child: Icon(Icons.lock_outline, size: 48, color: Colors.red.shade400),
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Database Initialization Failed',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                  ),
+                  'Security Initialization Failed',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'The secure database could not be opened.\n'
-                  'Please restart the application. If the problem '
-                  'persists, the database file may be corrupted.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                    height: 1.5,
-                  ),
+                Text(
+                  errorMessage ?? 'An internal security error occurred.',
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF666666)),
                   textAlign: TextAlign.center,
                 ),
               ],
