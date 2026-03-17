@@ -4,41 +4,34 @@ A production-style, secure desktop application for managing private notes. Built
 
 ## 🚀 Key Features
 
-- **Multi-Layer Encryption**: Data is encrypted both at the database level and the individual field level.
-- **Biometric & PIN Lock**: Native support for Windows Hello / TouchID and a secure fallback PIN.
-- **Inactivity Auto-Lock**: Automatically secures your data after 5 minutes of idleness.
-- **Fast Search**: Instant in-memory search across encrypted note titles and content.
-- **Modern Material 3 UI**: Clean design with master-detail layout optimized for desktop.
-- **Release Hardening**: Built-in protection against reverse engineering and memory leaks.
+- **Multi-Layer Defensive Suite**: Comprehensive security spanning from hardware-backed key storage to memory protection.
+- **Enterprise-Grade Encryption**: Combines full-disk SQLCipher encryption with field-level AES-256-GCM.
+- **Native OS Integration**: Leverages Windows Hello and macOS Touch ID for seamless, secure access.
+- **Privacy-First UX**: Automated features like clipboard clearing and background blurring protect data in real-time.
+- **Hardened for Production**: Built-in anti-tamper, anti-debugging, and obfuscation countermeasures.
 
 ## 🛡️ Security Implementation
 
-This application follows a "Security by Design" approach for local data:
+This application implements a robust, multi-layered security architecture designed to protect sensitive data at rest, in use, and in transit:
 
-1. **Disk Encryption & Hardening**: 
-   - **SQLCipher (AES-256-CBC)**: Full database encryption with `secure_delete` enabled.
-   - **Enhanced Hardening**: Configured with `256,000 KDF iterations`, `HMAC-SHA512`, and `PBKDF2-HMAC-SHA512` for extreme resistance against brute-force attacks.
-2. **Field-Level Encryption**:
-   - **AES-256-GCM**: Sensitive fields are double-encrypted with unique IVs for every record.
-   - **Decryption-on-Demand**: Notes are only decrypted in memory when actively opened.
-3. **Secure Key Management**:
-   - Keys are stored in Hardware-backed OS vaults (Windows Credential Manager / Apple Keychain).
-   - **macOS Dev Resilience**: Includes an in-memory fallback and self-healing logic for development sessions.
-4. **Advanced Access Control**:
-   - **Biometric & PIN**: Hardware-backed auth (TouchID/Windows Hello) with secure PIN fallback.
-   - **Auto-Lock**: Automatic lock after 5 minutes of inactivity or when the app is backgrounded/minimized.
-5. **Brute-Force & Emergency Protection**:
-   - **Rate Limiting**: Failed attempts trigger progressive lockouts (30s, 5m, 1h).
-   - **Emergency Wipe**: Critical data and keys are wiped after 10 consecutive failed attempts.
-6. **Physical & Visual Privacy**:
-   - **Screen Masking**: Contents are automatically blurred when the app loses focus or is backgrounded.
-   - **Clipboard Protection**: Automatically clears the system clipboard 30 seconds after copying.
-7. **Integrity & Anti-Tamper**:
-   - **Startup Checks**: Verifies binary integrity and detects debugger attachments.
-   - **Reverse Engineering Defense**: Native AOT compilation with symbol obfuscation and metadata stripping.
-8. **Secure Infrastructure**:
-   - **Secure Logging**: Sanitized logging ensures no keys or content ever reach the console.
-   - **Sandbox Storage**: Strictly follows platform-specific app-support directory rules.
+*   **Encrypted SQLite Database (SQLCipher)**: All notes are stored within an AES-256 encrypted database. This ensures that if the device files are accessed by an unauthorized entity, the raw data remains completely unreadable.
+*   **Secure Deletion**: Uses the `secure_delete` PRAGMA to ensure that when a note is deleted, its data is physically wiped from the disk, preventing recovery via forensic tools.
+*   **Field-Level Encryption (AES-256-GCM)**: Sensitive note content is encrypted before storage using authenticated encryption. This provides an additional layer of protection even if the database layer itself is compromised.
+*   **Hardware-Backed Key Storage**: Encryption keys are never stored in plain text or application files. Instead, they are secured in OS-level hardware vaults:
+    *   **Windows**: Windows Credential Manager
+    *   **macOS**: Apple Keychain
+*   **Biometric Authentication with PIN Fallback**: Only authorized users can access the app using platform-native biometrics (Touch ID / Windows Hello). A secure PIN system provides a reliable fallback.
+*   **Auto-Lock Context Awareness**: The application monitors user activity and automatically locks after a period of inactivity or when the app is backgrounded/minimized.
+*   **PIN Brute-Force Protection**: Implements progressive lockout delays and rate-limiting to prevent automated PIN-guessing attacks.
+*   **Clipboard Auto-Clear**: To prevent sensitive data leakage to other applications, any content copied to the clipboard is automatically cleared after a brief, configurable interval.
+*   **Screenshot & Background Blur Protection**: Sensitive content is hidden/blurred when the app loses focus or during screen recording/sharing to prevent accidental exposure.
+*   **Memory Protection**: Decrypted data is kept in memory only for the minimum duration required for display and is cleared immediately after use to mitigate memory-dump attacks.
+*   **Tamper Detection & Anti-Debugging**: Real-time checks detect if the application is being modified or if a debugger is attached, blocking execution to prevent exploitation.
+*   **Reverse Engineering Protection**: Production builds utilize AOT compilation, symbol obfuscation, and metadata stripping to hinder static and dynamic analysis.
+*   **Secure Logging Protocol**: A sanitized logging system ensures that sensitive information, such as note content or encryption keys, is never recorded.
+*   **CSPRNG Randomness**: All cryptographic operations (IV generation, key derivation) use OS-level cryptographically secure pseudo-random number generators.
+*   **Sandboxed Local Storage**: Application data is strictly confined to OS-secured, user-specific directories to prevent cross-app data access.
+*   **Emergency Data Wipe**: In the event of repeated unauthorized access attempts, the app can securely purge all sensitive keys and local data.
 
 ## 🛠️ Build for Release (Anti-Reversing)
 
