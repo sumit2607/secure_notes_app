@@ -74,4 +74,36 @@ The project follows a **Clean Architecture** pattern to ensure maintainability:
 - [ ] **Migration**: Check that old plain-text notes are automatically encrypted on launch.
 
 ---
-*Developed as a technical assignment focused on Flutter Desktop Security.*
+
+## 📦 Windows Installer (Inno Setup)
+
+To build a production-ready, system-wide installer on Windows:
+
+1.  **Build Release Binaries**:
+    ```powershell
+    flutter build windows --release
+    ```
+2.  **Run Inno Setup**:
+    - Download and install [Inno Setup 6+](https://jrsoftware.org/isdl.php).
+    - Open `windows/installer.iss` in Inno Setup.
+    - Click **Compile (F9)**.
+3.  **Output**: The installer will be generated at `build/windows/installer/SecureNotesInstaller.exe`.
+
+### 🛡️ Why Admin-Only Install but Usable by All?
+-   **System Integrity**: Installing in `C:/Program Files` requires Admin rights. This prevents non-admin users from modifying the application binaries (the `.exe` and `.dll` files), protecting the app against local tampering.
+-   **System-Wide Use**: Once installed by an Admin, the app icon is added to the Start Menu for all users on the machine. Any user can launch the app, but they cannot delete or modify the core app files.
+
+### 🔐 Security Architecture & Data Isolation
+-   **Binary Protection**: Binaries are stored in a read-only area for standard users.
+-   **Per-User Data Isolation**: Even though the app is shared, each Windows user has their own private `%LOCALAPPDATA%` folder.
+    -   User A's database is at `C:/Users/UserA/AppData/Local/com.securenotes/data/secure_notes.db`.
+    -   User B's database is entirely separate at `C:/Users/UserB/AppData/Local/com.securenotes/data/secure_notes.db`.
+-   **Encryption Boundary**: One user cannot access another user's encrypted database because they are isolated by OS-level file permissions and secured with individual hardware-vault keys.
+
+### 🧪 Testing Multi-User Behavior
+1.  Install the app as **Administrator**.
+2.  Log in as **User A**, create a note, and set a PIN.
+3.  Switch User/Logout and log in as **User B**.
+4.  Open the app; verify it asks for a *new* setup or is currently empty.
+5.  Verify **User B** cannot see **User A's** notes.
+6.  Navigate to User A's `AppData` folder as User B; verify access is denied by Windows.
