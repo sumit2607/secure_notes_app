@@ -80,7 +80,7 @@ void _configureSqlCipher() {
   if (Platform.isAndroid) {
     open.overrideFor(OperatingSystem.android, openCipherOnAndroid);
   } else if (Platform.isWindows) {
-    open.overrideFor(OperatingSystem.windows, () => DynamicLibrary.open('sqlcipher.dll'));
+    open.overrideFor(OperatingSystem.windows, () => DynamicLibrary.open('sqlite3.dll'));
   } else if (Platform.isMacOS) {
     open.overrideFor(OperatingSystem.macOS, () {
       try {

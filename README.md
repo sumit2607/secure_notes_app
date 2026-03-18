@@ -47,6 +47,11 @@ flutter build macos --obfuscate --split-debug-info=./debug_info
 flutter build windows --obfuscate --split-debug-info=./debug_info
 ```
 
+### 🛡️ Integrity & Anti-Debugging
+- **Real-Time Protection**: The application uses the `IntegrityService` to monitor the environment for security threats.
+- **Anti-Debugging (Windows)**: Uses the Win32 API `IsDebuggerPresent` from `kernel32.dll` to detect if a debugger is attached. If detected, the application will log the event and terminate immediately to prevent reverse engineering.
+- **Secure Startup**: The check is performed at the very beginning of the `main()` function to ensure the environment is safe before any sensitive data is loaded.
+
 ## 🏗️ Architecture
 
 The project follows a **Clean Architecture** pattern to ensure maintainability:
@@ -55,25 +60,18 @@ The project follows a **Clean Architecture** pattern to ensure maintainability:
 - **Domain**: Pure business logic, note entities, and repository interfaces.
 - **Data**: SQLCipher implementation, secure note models, and field-encryption logic.
 - **Presentation**: UI widgets, state controllers, and the Security Gate (Lock Screen).
-- **Services**: Platform abstractions (Keychain/Credential Manager, Biometrics).
+- **Services**: Platform abstractions (Keychain/Credential Manager, Biometrics, Integrity).
 
-## 🔐 Backup & Recovery
-- **No Backdoors**: Because all data is encrypted with keys stored in your system's hardware vault, if you lose access to your OS account or forget your master PIN, your data is **cryptographically unrecoverable**.
-- **Manual Backups**: You can backup the `secure_notes.db` file from the app support directory. Note that the file remains encrypted and requires the original OS vault to open.
+## 🧰 Development & Troubleshooting (Windows)
 
-## 🕵️ Threat Model
-- **Mitigated: Casual File Theft**: An attacker stealing the `.db` file cannot read contents without the OS-vault key.
-- **Mitigated: Plain-text DB Exposure**: Even in an unlocked DB, sensitive fields are stored as AES-GCM ciphertexts.
-- **Mitigated: Forensics recovery**: Deleted data is physically overwritten via `secure_delete`.
-- **Limitation: Compromised OS**: Administrative access or keyloggers on a host OS can still potentially capture live data.
+### SQLCipher DLL Loading
+The `sqlcipher_flutter_libs` package on Windows bundles the encrypted SQLite engine as `sqlite3.dll`. Ensure that the `_configureSqlCipher` function in `lib/main.dart` is configured to load the correct library:
 
-## 🛠️ Security Verification Checklist
-- [ ] **App Lock**: Verify that the app asks for biometrics/PIN on startup once enabled.
-- [ ] **Inactivity**: Wait 5 minutes; verify the app locks automatically.
-- [ ] **Hex Verification**: Open the `.db` in a hex editor; verify titles/content are gibberish.
-- [ ] **Migration**: Check that old plain-text notes are automatically encrypted on launch.
-
----
+```dart
+} else if (Platform.isWindows) {
+  open.overrideFor(OperatingSystem.windows, () => DynamicLibrary.open('sqlite3.dll'));
+}
+```
 
 ## 📦 Windows Installer (Inno Setup)
 
@@ -87,7 +85,7 @@ To build a production-ready, system-wide installer on Windows:
     - Download and install [Inno Setup 6+](https://jrsoftware.org/isdl.php).
     - Open `windows/installer.iss` in Inno Setup.
     - Click **Compile (F9)**.
-3.  **Output**: The installer will be generated at `build/windows/installer/SecureNotesInstaller.exe`.
+3.  **Output**: The installer will be generated at `windows/SecureNotesInstaller.exe`.
 
 ### 🛡️ Why Admin-Only Install but Usable by All?
 -   **System Integrity**: Installing in `C:/Program Files` requires Admin rights. This prevents non-admin users from modifying the application binaries (the `.exe` and `.dll` files), protecting the app against local tampering.
